@@ -22,17 +22,15 @@ Using JSMQ is very similar to using other high level binding of ZeroMQ, download
 		// send ready will be raised when at least when socket got connected, 
 		// if you try to send a message before the event the message will be dropped
 		// the event will raised again only if the send method return false.		
-		dealer.sendReady = function(socket)
-			{ 				
-				alert("ready to send");
-			};
+		dealer.sendReady = function(socket) { 				
+			alert("ready to send");
+		   };
 		
 		// receive ready will be raised when there is message ready to be received, 
 		// trying to receive message before this event will get you a null message
 		// the event will be raised again only if you received null message, 
 		// therefore every time the event is triggered you must conumse all the messages
-		dealer.receiveReady = function(socket)
-		{		
+		dealer.receiveReady = function(socket) {		
 			var message = dealer.receive();
 		
 			while(message!=null)

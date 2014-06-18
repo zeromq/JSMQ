@@ -45,8 +45,7 @@ Using JSMQ is very similar to using other high level binding of ZeroMQ, download
 		dealer.connect("ws://localhost:80");		
 		dealer.connect("ws://localhost:81");		
 		
-		function send()
-		{
+		function send() {
 			// send a message to the zeromq server
 			dealer.send("hello");
 		}		

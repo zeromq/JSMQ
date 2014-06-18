@@ -1,0 +1,19 @@
+﻿<?xml version="1.0" encoding="utf-8"?>
+<package xmlns="http://schemas.microsoft.com/packaging/2011/10/nuspec.xsd">
+    <metadata>
+        <id>JSMQ</id>
+        <version>0.1-Beta</version>
+        <title>JSMQ</title>
+        <authors>somdoron</authors>
+        <owners>somdoron</owners>
+        <projectUrl>https://github.com/somdoron/JSMQ</projectUrl>
+        <requireLicenseAcceptance>false</requireLicenseAcceptance>
+        <description>Javascript client for NetMQ/ZeroMQ over WebSocket.
+
+Please note ZeroMQ/NetMQ don't support WebSockets yet, but you can download NetMQ.WebSockets from nuget as an extesnion to NetMQ.</description>
+        <tags>WebSockets ZeroMQ NetMQ</tags>
+    </metadata>
+    <files>
+        <file src="JSMQ.js" target="JSMQ.js" />
+    </files>
+</package>

@@ -13,7 +13,7 @@ The JSMQ currently only implement the dealer pattern and the NetMQ WebSockets on
 
 Using JSMQ is very similar to using other high level binding of ZeroMQ, download the JSMQ.js from the github page. Following is small example:
 
-```
+
 <html>
 	<script src="JSMQ.js" />	
 	<script>
@@ -54,7 +54,7 @@ Using JSMQ is very similar to using other high level binding of ZeroMQ, download
 		<button  onclick="javascript: send()" >Send</button>			
 	</body>
 </html>
-```
+
 
 
 

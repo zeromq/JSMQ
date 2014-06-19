@@ -2,7 +2,7 @@
 <package xmlns="http://schemas.microsoft.com/packaging/2011/10/nuspec.xsd">
     <metadata>
         <id>JSMQ</id>
-        <version>0.1-Beta</version>
+        <version>0.3-Beta</version>
         <title>JSMQ</title>
         <authors>somdoron</authors>
         <owners>somdoron</owners>
@@ -14,6 +14,6 @@ Please note ZeroMQ/NetMQ don't support WebSockets yet, but you can download NetM
         <tags>WebSockets ZeroMQ NetMQ</tags>
     </metadata>
     <files>
-        <file src="JSMQ.js" target="JSMQ.js" />
+        <file src="JSMQ.js" target="content\Scripts\JSMQ.js" />
     </files>
 </package>

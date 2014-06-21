@@ -9,11 +9,12 @@ function Endpoint(address) {
     
     console.log("connecting to " + address);
     var webSocket = null;
-    var state = ClosedState;
-
-    var inPipe = [];        
+    var state = ClosedState;     
     
     var that = this;
+
+    var incomingMessage = null;
+    var outgoingMessage = null;
 
     open();
     
@@ -24,12 +25,15 @@ function Endpoint(address) {
             webSocket.onmessage = null;
         }
 
+        incomingMessage = [];
+        outgoingMessage = [];
+
         webSocket = new window.WebSocket(address, ["WSNetMQ"]);
         state = ConnectingState;
 
         webSocket.onopen = onopen;
         webSocket.onclose = onclose;
-        webSocket.onmessage = onmessage;
+        webSocket.onmessage = onmessage;       
     }
     
     function onopen (e) {
@@ -59,11 +63,18 @@ function Endpoint(address) {
         }
     };
 
-    function onmessage(message) {
-        inPipe.push(message.data);
-        
-        if (that.readActivated != null && inPipe.length == 1) {
-            that.readActivated(that);
+    function onmessage(ev) {        
+        var more = ev.data[0];        
+
+        incomingMessage.push(ev.data.substr(1));
+
+        // last message
+        if (more == '0') {
+            if (that.onMessage != null) {
+                that.onMessage(that, incomingMessage);
+            }
+
+            incomingMessage = [];
         }
     };
     
@@ -73,37 +84,36 @@ function Endpoint(address) {
     // deactivated event
     this.deactivated = null;
 
-    // messages are ready to be read
-    this.readActivated = null;
+    this.onMessage = null;
     
-    this.getHasOut = function() {
+    this.getIsActive = function() {
         return state == ActiveState;
-    };
+    };    
 
-    this.getHasIn = function() {
-        return inPipe.length > 0;
-    };
+    this.write = function (frame, more) {
+        if (more) {
+            outgoingMessage.push("1" + frame);
+        } else {
+            outgoingMessage.push("0" + frame);
 
-    this.write = function(message) {
-        webSocket.send(message);
-    };
+            for (var i = 0; i < outgoingMessage.length; i++) {
+                webSocket.send(outgoingMessage[i]);
+            }
 
-    this.read = function() {
-        if (inPipe.length == 0)
-            return null;
-
-        return inPipe.shift();
-    };
+            outgoingMessage = [];
+        }        
+    };    
 }
 
 // LoadBalancer
 
 function LB() {
-    var endpoints = [];
-    
+    var endpoints = [];    
     var current = 0;
-
     var isActive = false;
+
+    var inprogress = false;
+    var dropping = false;
 
     this.writeActivated = null;
 
@@ -123,128 +133,52 @@ function LB() {
     this.terminated = function(endpoint) {
         var index = endpoints.indexOf(endpoint);
         
-        if (current == index) {
-            current = 0;
+        if (current == index && inprogress) {            
+                dropping = true;            
         }
 
+        if (current == endpoints.length - 1) {
+            current = 0;
+        }
+        
         endpoints.splice(index, 1);
     };
 
-    this.send = function(message) {
+    this.send = function (message, more) {
+        if (dropping) {
+            inprogress = more;
+            dropping = more;
+
+            return true;
+        }
+
         if (endpoints.length == 0) {
             isActive = false;
             return false;
         }
 
-        endpoints[current].write(message);
-        current = (current + 1) % endpoints.length;
+        endpoints[current].write(message, more);
 
+        if (!more) {
+            current = (current + 1) % endpoints.length;
+        }
+        
         return true;
     };
 
-    this.getHasOut = function() {
-        return endpoints.length > 1;
-    };
-}
+    this.getHasOut = function () {
+        if (inprogress)
+            return true;
 
-// FairQueueing
-
-function FQ() {
-    var that = this;
-    var endpoints = [];
-
-    var current = 0;
-    var activeIndex = 0;
-    var isActive = false;
-
-    
-    function swap(index1, index2) {
-        var temp = endpoints[index1];
-        endpoints[index1] = endpoints[index2];
-        endpoints[index2] = temp;
-    }
-
-    this.readActivated = null;
-
-    this.attach = function (endpoint) {
-        endpoints.push(endpoint);
-        endpoint.readActivated = function(e) {
-            swap(endpoints.indexOf(endpoint), activeIndex);
-            activeIndex++;
-            
-            if (!isActive) {
-                isActive = true;
-
-                if (that.readActivated != null) {
-                    that.readActivated();                
-                }
-            }
-        };
-        swap(activeIndex, endpoints.length - 1);
-    };
-
-    this.terminated = function (endpoint) {
-        var index = endpoints.indexOf(endpoint);
-
-        if (index < activeIndex) {
-            activeIndex--;
-            swap(index, activeIndex);
-            
-            if (current == activeIndex) {
-                current = 0;
-            }
-        }
-        endpoints.splice(index, 1);
-        endpoint.readActivated = null;
-    };  
-
-    this.receive = function() {
-        var message;
-
-        while (activeIndex > 0) {
-            message = endpoints[current].read();
-            
-            if (message != null) {
-                current = (current + 1) % activeIndex;
-
-                return message;
-            }
-
-            activeIndex--;
-            swap(current, activeIndex);
-
-            if (current == activeIndex)
-                current = 0;
-        }
-
-        isActive = false;
-
-        return null;
-    };
-    
-    this.getHasIn = function () {
-        while (activeIndex > 0) {
-            if (endpoints[current].getHasIn())
-                return true;
-
-            activeIndex--;
-            swap(endpoints, current, activeIndex);
-            
-            if (current == activeIndex)
-                current = 0;
-        }
-
-        isActive = false;
-
-        return false;
+        return endpoints.length > 0;
     };
 }
 
 // SocketBase Class
 
-function SocketBase(xattachEndpoint, xendpointTerminated, xhasIn, xhasOut, xsend, xreceive) {
+function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMessage) {
 
-    this.receiveReady = null;
+    this.onMessage = null;
     this.sendReady = null;
 
     var endpoints = [];
@@ -261,6 +195,7 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasIn, xhasOut, xsend
         var endpoint = new Endpoint(address);
         endpoint.activated = onEndpointActivated;
         endpoint.deactivated = onEndpointDeactivated;
+        endpoint.onMessage = xonMessage;
         endpoints.push(endpoint);
     };
 
@@ -268,18 +203,12 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasIn, xhasOut, xsend
         // TODO: implement disconnect
     };
     
-    this.send = function(message) {
-        return xsend(message);
-    };
+    this.send = function (message, more) {
+        more = typeof more !== 'undefined' ? more : false;
 
-    this.receive = function() {
-        return xreceive();
+        return xsend(message, more);
     };
-
-    this.getHasIn = function() {
-        return xhasIn();
-    };
-
+   
     this.getHasOut = function() {
         return xhasOut();
     };
@@ -287,17 +216,10 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasIn, xhasOut, xsend
 
 
 function Dealer() {
-
-    var fq = new FQ();
+ 
     var lb = new LB();
     
-    var that = new SocketBase(xattachEndpoint, xendpointTerminated, xhasIn, xhasOut, xsend, xreceive);
-
-    fq.readActivated = function() {
-        if (that.receiveReady != null) {
-            that.receiveReady(that);
-        }
-    };
+    var that = new SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMessage);
 
     lb.writeActivated = function() {
         if (that.sendReady != null) {
@@ -305,31 +227,93 @@ function Dealer() {
         }
     };
 
-    function xattachEndpoint(endpoint) {
-        fq.attach(endpoint);
+    function xattachEndpoint(endpoint) {    
         lb.attach(endpoint);
     }
 
-    function xendpointTerminated(endpoint) {
-        fq.terminated(endpoint);
+    function xendpointTerminated(endpoint) {        
         lb.terminated(endpoint);
-    }
-
-    function xhasIn() {
-        return fq.getHasIn();
-    }
+    }    
 
     function xhasOut() {
         return lb.getHasOut();
     }
 
-    function xsend(message) {
-        return lb.send(message);
+    function xsend(message, more) {
+        return lb.send(message, more);
     }
 
-    function xreceive() {
-        return fq.receive();
+    function xonMessage(endpoint, message) {
+        if (that.onMessage != null) {
+            that.onMessage(message);
+        }
     }
+
+    return that;
+}
+
+function Subscriber() {           
+
+    var that = new SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMessage);;
+
+    var subscriptions = [];
+    var endpoints = [];
+
+    var isActive = false;
+
+    that.subscribe = function (subscription) {
+        // TODO: check if the subscription already exist
+        subscriptions.push(subscription);
+        
+        for (var i = 0; i < endpoints.length; i++) {
+            endpoints[i].write("1" + subscription);
+        }
+    }
+
+    that.unsubscribe = function (subscription) {
+        // TODO: check if the subscription even exist
+        var index = subscriptions.indexOf(subscription);
+        subscriptions.splice(index, 1);
+
+        for (var i = 0; i < endpoints.length; i++) {
+            endpoints[i].write("0" + subscription);
+        }
+    }
+
+    function xattachEndpoint(endpoint) {
+        endpoints.push(endpoint);
+
+        for (var i = 0; i < subscriptions.length; i++) {
+            endpoint.write("1" + subscriptions[i], false);
+        }
+
+        if (!isActive) {
+            isActive = true;
+
+            if (that.sendReady != null) {
+                that.sendReady(that);
+            }
+        }
+    }
+
+    function xendpointTerminated(endpoint) {
+        var index = endpoints.indexOf(endpoint);
+        endpoints.splice(index, 1);
+    }
+
+    function xhasOut() {
+        return false;
+    }   
+
+    function xsend(message, more) {
+        throw new "Send not supported on sub socket";
+    }
+
+    function xonMessage(endpoint, message) {
+        if (that.onMessage != null) {
+            that.onMessage(message);
+        }
+    }    
 
     return that;
 }

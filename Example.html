@@ -3,21 +3,28 @@
     <script>
         var dealer = new Dealer();
         dealer.connect("ws://localhost");
+
+        // we must wait for the dealer to be connected before we can send messages, any messages we are trying to send
+        // while the dealer is not connected will be dropped
         dealer.sendReady = function() {
             document.getElementById("sendButton").disabled = "";
         };
 
         var subscriber = new Subscriber();
         subscriber.connect("ws://localhost:81");
-        subscriber.subscribe("");
+        subscriber.subscribe("chat");
 
         subscriber.onMessage = function (message) {
-                document.getElementById("chatTextArea").value =
-                    document.getElementById("chatTextArea").value +
-                    message[1]  + "\n";
+            // message is an array of all the message parts
+            // we ignore the first frame because it's topic
+
+            document.getElementById("chatTextArea").value =
+                document.getElementById("chatTextArea").value +
+                message[1]  + "\n";
         };
 
-        dealer.onMessage = function(message) {
+        dealer.onMessage = function (message) {
+            // the response from the server
             alert(message[0]);
         };
 
@@ -27,7 +34,8 @@
     </script>
     <body>                        
         <textarea id="chatTextArea" readonly="readonly"></textarea>
-        <input id="messageTextBox" value="11" />
+        <br/>
+        <label>Message:</label><input id="messageTextBox" value="" />
         <button id="sendButton" disabled="disabled" onclick="javascript:send();">
             Send
         </button>                    

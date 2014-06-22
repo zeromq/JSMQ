@@ -1,0 +1,35 @@
+<html>
+    <script src="C:\Git\JSMQ\JSMQ.js"></script>
+    <script>
+        var dealer = new Dealer();
+        dealer.connect("ws://localhost");
+        dealer.sendReady = function() {
+            document.getElementById("sendButton").disabled = "";
+        };
+
+        var subscriber = new Subscriber();
+        subscriber.connect("ws://localhost:81");
+        subscriber.subscribe("");
+
+        subscriber.onMessage = function (message) {
+                document.getElementById("chatTextArea").value =
+                    document.getElementById("chatTextArea").value +
+                    message[1]  + "\n";
+        };
+
+        dealer.onMessage = function(message) {
+            alert(message[0]);
+        };
+
+        function send() {
+            dealer.send(document.getElementById("messageTextBox").value);
+        }
+    </script>
+    <body>                        
+        <textarea id="chatTextArea" readonly="readonly"></textarea>
+        <input id="messageTextBox" value="11" />
+        <button id="sendButton" disabled="disabled" onclick="javascript:send();">
+            Send
+        </button>                    
+    </body>
+</html>

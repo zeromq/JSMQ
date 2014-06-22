@@ -11,7 +11,9 @@ Both JSMQ and NetMQ WebSockets are beta at the moment and the API and protocol w
 
 The JSMQ currently only implement the dealer pattern and the NetMQ WebSockets only implement the router pattern, but we can start work with that.
 
-Using JSMQ is very similar to using other high level binding of ZeroMQ, download the JSMQ.js from the github page. Following is small example:
+You can download the JSMQ.JS file from this page or from (nuget)[https://www.nuget.org/packages/JSMQ/], just search for JSMQ and include prerelease.
+
+Using JSMQ is very similar to using other high level binding of ZeroMQ. Following is small example:
 
 ```html
 <html>

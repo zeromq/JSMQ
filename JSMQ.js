@@ -14,7 +14,7 @@ function Endpoint(address) {
     var that = this;
 
     var incomingMessage = null;
-    var outgoingMessage = null;
+    var outgoingArray = null;
 
     open();
     
@@ -24,11 +24,11 @@ function Endpoint(address) {
             webSocket.onclose = null;
             webSocket.onmessage = null;
         }
-
-        incomingMessage = [];
-        outgoingMessage = [];
+        
+        outgoingArray = [];
 
         webSocket = new window.WebSocket(address, ["WSNetMQ"]);
+        webSocket.binaryType = "arraybuffer";
         state = ConnectingState;
 
         webSocket.onopen = onopen;
@@ -63,18 +63,23 @@ function Endpoint(address) {
         }
     };
 
-    function onmessage(ev) {        
-        var more = ev.data[0];        
+    function onmessage(ev) {
+        var view = new Uint8Array(ev.data);
+        var more = view[0];
 
-        incomingMessage.push(ev.data.substr(1));
+        if (incomingMessage == null) {
+            incomingMessage = new JSMQMessage();
+        }
+
+        incomingMessage.addBuffer(ev.data);
 
         // last message
-        if (more == '0') {
+        if (more == 0) {
             if (that.onMessage != null) {
                 that.onMessage(that, incomingMessage);
             }
 
-            incomingMessage = [];
+            incomingMessage = null;
         }
     };
     
@@ -92,15 +97,15 @@ function Endpoint(address) {
 
     this.write = function (frame, more) {
         if (more) {
-            outgoingMessage.push("1" + frame);
+            outgoingArray.push(frame);
         } else {
-            outgoingMessage.push("0" + frame);
+            outgoingArray.push(frame);
 
-            for (var i = 0; i < outgoingMessage.length; i++) {
-                webSocket.send(outgoingMessage[i]);
+            for (var i = 0; i < outgoingArray.length; i++) {               
+                webSocket.send(outgoingArray[i]);
             }
 
-            outgoingMessage = [];
+            outgoingArray = [];
         }        
     };    
 }
@@ -203,10 +208,14 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
         // TODO: implement disconnect
     };
     
-    this.send = function (message, more) {
-        more = typeof more !== 'undefined' ? more : false;
+    this.send = function (message) {
+        for (var i = 0; i < message.getSize(); i++) {
 
-        return xsend(message, more);
+            var frame = message.getFrameBuffer(i);
+            var more = new Uint8Array(frame)[0] == 1;
+
+            return xsend(frame, more);
+        }        
     };
    
     this.getHasOut = function() {
@@ -317,3 +326,58 @@ function Subscriber() {
 
     return that;
 }
+
+function JSMQMessage() {    
+    var frames = [];
+
+    this.getSize = function() {
+        return frames.length;
+    }
+
+    this.addString = function (str) {
+        str = String(str);
+
+        // one more byte is saved for the more byte
+        var buffer = new ArrayBuffer(str.length + 1);
+
+        str2ab(str, buffer);
+
+        frames.push(buffer);
+    }
+
+    this.popString = function() {
+        var frame = frames[0];
+        frames.splice(0, 1);
+
+        return ab2str(frame);
+    }
+
+    this.getFrameBuffer = function (i) {
+        return frames[i];
+    }
+
+    this.addBuffer = function(buffer) {
+        frames.push(buffer);
+    }
+    
+    function ab2str(buffer) {        
+        var bufView = new Uint8Array(buffer, 1);
+
+        return String.fromCharCode.apply(null, bufView);
+    }
+
+    function str2ab(str, buffer) {        
+        var bufView = new Uint8Array(buffer, 1);
+        for (var i = 0, strLen = str.length; i < strLen; i++) {
+            var char =  str.charCodeAt(i);
+
+            if (char > 255) {
+                // only ASCII are supported at the moment, we will put ? instead
+                bufView[i] = "?".charCodeAt();
+            } else {
+                bufView[i] = char;
+            }            
+        }        
+    }
+}
+

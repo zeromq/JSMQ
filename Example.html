@@ -1,7 +1,7 @@
 <html>
     <script src="C:\Git\JSMQ\JSMQ.js"></script>
     <script>
-        var dealer = new Dealer();
+        var dealer = new JSMQ.Dealer();
         dealer.connect("ws://localhost");
 
         // we must wait for the dealer to be connected before we can send messages, any messages we are trying to send
@@ -10,26 +10,30 @@
             document.getElementById("sendButton").disabled = "";
         };
 
-        var subscriber = new Subscriber();
+        var subscriber = new JSMQ.Subscriber();
         subscriber.connect("ws://localhost:81");
         subscriber.subscribe("chat");
 
         subscriber.onMessage = function (message) {
-            // message is an array of all the message parts
+            
             // we ignore the first frame because it's topic
+            message.popString();
 
             document.getElementById("chatTextArea").value =
                 document.getElementById("chatTextArea").value +
-                message[1]  + "\n";
+                message.popString()  + "\n";
         };
 
         dealer.onMessage = function (message) {
             // the response from the server
-            alert(message[0]);
+            alert(message.popString());
         };
 
         function send() {
-            dealer.send(document.getElementById("messageTextBox").value);
+            var message = new JSMQ.Message();
+            message.addString(document.getElementById("messageTextBox").value);
+            
+            dealer.send(message);
         }
     </script>
     <body>                        

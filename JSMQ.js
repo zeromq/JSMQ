@@ -266,18 +266,14 @@ function Subscriber() {
     that.subscribe = function (subscription) {
 
         if (subscription instanceof Uint8Array) {
-            subscriptions.push(subscription);
+            // continue
         }
         else if (subscription instanceof ArrayBuffer) {
-            subscription = new Uint8Array(subscription);
-
-            subscriptions.push(subscription);
-        } else {
-            subscription = String(subscription);
-
-            subscription = StringUtility.StringToUint8Array(subscription);
+            subscription = new Uint8Array(subscription);           
+        } else {            
+            subscription = StringUtility.StringToUint8Array(String(subscription));
         }
-
+        
         // TODO: check if the subscription already exist
         subscriptions.push(subscription)
 
@@ -289,10 +285,35 @@ function Subscriber() {
     }
     
     that.unsubscribe = function (subscription) {
-        // TODO: check if the subscription even exist
-        var index = subscriptions.indexOf(subscription);
-        subscriptions.splice(index, 1);
+        if (subscription instanceof Uint8Array) {
+            // continue
+        }
+        else if (subscription instanceof ArrayBuffer) {
+            subscription = new Uint8Array(subscription);
+            
+        } else {
+            subscription = StringUtility.StringToUint8Array(String(subscription));
+        }        
 
+        for (var j = 0; j < subscriptions.length; j++) {
+
+            if (subscriptions[j].length == subscription.length) {
+                var equal = true;
+
+                for (var k = 0; k < subscriptions[j].length; k++) {
+                    if (subscriptions[j][k] != subscription[k]) {
+                        equal = false;
+                        break;
+                    }
+                }
+
+                if (equal) {
+                    subscriptions.splice(j, 1);
+                    break;
+                }
+            }
+        }        
+        
         var message = createSubscriptionMessage(subscription, false);
 
         for (var i = 0; i < endpoints.length; i++) {

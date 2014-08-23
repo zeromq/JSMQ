@@ -1,5 +1,4 @@
 // Endpoint class
-
 function Endpoint(address) {
     var ClosedState = 0;
     var ConnectingState = 1;
@@ -13,8 +12,7 @@ function Endpoint(address) {
     
     var that = this;
 
-    var incomingMessage = null;
-    var outgoingMessage = null;
+    var incomingMessage = null;    
 
     open();
     
@@ -24,16 +22,18 @@ function Endpoint(address) {
             webSocket.onclose = null;
             webSocket.onmessage = null;
         }
-
-        incomingMessage = [];
-        outgoingMessage = [];
+        
+        outgoingArray = [];
 
         webSocket = new window.WebSocket(address, ["WSNetMQ"]);
+        webSocket.binaryType = "arraybuffer";
         state = ConnectingState;
 
         webSocket.onopen = onopen;
         webSocket.onclose = onclose;
-        webSocket.onmessage = onmessage;       
+        webSocket.onmessage = onmessage;
+
+        reconnectTries++;
     }
     
     function onopen (e) {
@@ -63,20 +63,39 @@ function Endpoint(address) {
         }
     };
 
-    function onmessage(ev) {        
-        var more = ev.data[0];        
+    function onmessage(ev) {
+        if (ev.data instanceof Blob) {
+            var arrayBuffer;
+            var fileReader = new FileReader();
+            fileReader.onload = function () {
+                processFrame(this.result);
+            };
+            fileReader.readAsArrayBuffer(ev.data);
+        } else if (ev.data instanceof ArrayBuffer) {
+            processFrame(ev.data);
+        }
+        // Other message type are not supported and will just be dropped
+    };
 
-        incomingMessage.push(ev.data.substr(1));
+    function processFrame(frame) {
+        var view = new Uint8Array(frame);
+        var more = view[0];
+
+        if (incomingMessage == null) {
+            incomingMessage = new JSMQ.Message();
+        }
+
+        incomingMessage.addBuffer(frame);
 
         // last message
-        if (more == '0') {
+        if (more == 0) {
             if (that.onMessage != null) {
                 that.onMessage(that, incomingMessage);
             }
 
-            incomingMessage = [];
+            incomingMessage = null;
         }
-    };
+    }
     
     // activated event, when the socket is open
     this.activated = null;
@@ -90,17 +109,18 @@ function Endpoint(address) {
         return state == ActiveState;
     };    
 
-    this.write = function (frame, more) {
-        if (more) {
-            outgoingMessage.push("1" + frame);
-        } else {
-            outgoingMessage.push("0" + frame);
+    this.write = function (message) {
+        var messageSize = message.getSize();
+        
+        for (var j = 0; j < messageSize; j++) {
+            var frame = message.getBuffer(j);
 
-            for (var i = 0; i < outgoingMessage.length; i++) {
-                webSocket.send(outgoingMessage[i]);
-            }
+            var data = new Uint8Array(frame.length + 1);
+            data[0] = j == messageSize - 1 ? 0 : 1; // set the more byte
 
-            outgoingMessage = [];
+            data.set(frame, 1);
+
+            webSocket.send(data);
         }        
     };    
 }
@@ -111,10 +131,7 @@ function LB() {
     var endpoints = [];    
     var current = 0;
     var isActive = false;
-
-    var inprogress = false;
-    var dropping = false;
-
+    
     this.writeActivated = null;
 
     var that = this;
@@ -131,11 +148,7 @@ function LB() {
     };
 
     this.terminated = function(endpoint) {
-        var index = endpoints.indexOf(endpoint);
-        
-        if (current == index && inprogress) {            
-                dropping = true;            
-        }
+        var index = endpoints.indexOf(endpoint);        
 
         if (current == endpoints.length - 1) {
             current = 0;
@@ -144,25 +157,15 @@ function LB() {
         endpoints.splice(index, 1);
     };
 
-    this.send = function (message, more) {
-        if (dropping) {
-            inprogress = more;
-            dropping = more;
-
-            return true;
-        }
-
+    this.send = function (message) {        
         if (endpoints.length == 0) {
             isActive = false;
             return false;
         }
 
-        endpoints[current].write(message, more);
-
-        if (!more) {
-            current = (current + 1) % endpoints.length;
-        }
-        
+        endpoints[current].write(message);        
+        current = (current + 1) % endpoints.length;
+                
         return true;
     };
 
@@ -203,10 +206,8 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
         // TODO: implement disconnect
     };
     
-    this.send = function (message, more) {
-        more = typeof more !== 'undefined' ? more : false;
-
-        return xsend(message, more);
+    this.send = function (message) {        
+        return xsend(message);                
     };
    
     this.getHasOut = function() {
@@ -214,8 +215,12 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
     };
 }
 
+// JSMQ namespace
+function JSMQ() {
+    
+}
 
-function Dealer() {
+JSMQ.Dealer = function() {
  
     var lb = new LB();
     
@@ -239,8 +244,8 @@ function Dealer() {
         return lb.getHasOut();
     }
 
-    function xsend(message, more) {
-        return lb.send(message, more);
+    function xsend(message) {
+        return lb.send(message);
     }
 
     function xonMessage(endpoint, message) {
@@ -252,7 +257,7 @@ function Dealer() {
     return that;
 }
 
-function Subscriber() {           
+JSMQ.Subscriber = function () {           
 
     var that = new SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMessage);;
 
@@ -262,29 +267,81 @@ function Subscriber() {
     var isActive = false;
 
     that.subscribe = function (subscription) {
-        // TODO: check if the subscription already exist
-        subscriptions.push(subscription);
+
+        if (subscription instanceof Uint8Array) {
+            // continue
+        }
+        else if (subscription instanceof ArrayBuffer) {
+            subscription = new Uint8Array(subscription);           
+        } else {            
+            subscription = StringUtility.StringToUint8Array(String(subscription));
+        }
         
+        // TODO: check if the subscription already exist
+        subscriptions.push(subscription)
+
+        var message = createSubscriptionMessage(subscription, true);
+                
+        for (var i = 0; i < endpoints.length; i++) {            
+            endpoints[i].write(message);
+        }
+    }
+    
+    that.unsubscribe = function (subscription) {
+        if (subscription instanceof Uint8Array) {
+            // continue
+        }
+        else if (subscription instanceof ArrayBuffer) {
+            subscription = new Uint8Array(subscription);
+            
+        } else {
+            subscription = StringUtility.StringToUint8Array(String(subscription));
+        }        
+
+        for (var j = 0; j < subscriptions.length; j++) {
+
+            if (subscriptions[j].length == subscription.length) {
+                var equal = true;
+
+                for (var k = 0; k < subscriptions[j].length; k++) {
+                    if (subscriptions[j][k] != subscription[k]) {
+                        equal = false;
+                        break;
+                    }
+                }
+
+                if (equal) {
+                    subscriptions.splice(j, 1);
+                    break;
+                }
+            }
+        }        
+        
+        var message = createSubscriptionMessage(subscription, false);
+
         for (var i = 0; i < endpoints.length; i++) {
-            endpoints[i].write("1" + subscription);
+            endpoints[i].write(message);
         }
     }
 
-    that.unsubscribe = function (subscription) {
-        // TODO: check if the subscription even exist
-        var index = subscriptions.indexOf(subscription);
-        subscriptions.splice(index, 1);
+    function createSubscriptionMessage(subscription, subscribe) {
+        var frame = new Uint8Array(subscription.length + 1);
+        frame[0] = subscribe ? 1 : 0;
+        frame.set(subscription, 1);
 
-        for (var i = 0; i < endpoints.length; i++) {
-            endpoints[i].write("0" + subscription);
-        }
+        var message = new JSMQ.Message();
+        message.addBuffer(frame);
+
+        return message;
     }
 
     function xattachEndpoint(endpoint) {
         endpoints.push(endpoint);
 
         for (var i = 0; i < subscriptions.length; i++) {
-            endpoint.write("1" + subscriptions[i], false);
+            var message = createSubscriptionMessage(subscriptions[i], true);
+
+            endpoint.write(message);
         }
 
         if (!isActive) {
@@ -316,4 +373,93 @@ function Subscriber() {
     }    
 
     return that;
+}
+
+JSMQ.Message = function () {
+    var frames = [];
+
+    this.getSize = function() {
+        return frames.length;
+    }
+
+    // add string at the begining of the message
+    this.prependString = function(str) {
+        str = String(str);
+
+        // one more byte is saved for the more byte
+        var buffer = new Uint8Array(str.length);
+
+        StringUtility.StringToUint8Array(str, buffer);
+
+        frames.splice(0, 0, buffer);
+    }
+
+    // add the string at the end of the message
+    this.addString = function(str) {
+        str = String(str);
+
+        // one more byte is saved for the more byte
+        var buffer = new Uint8Array(str.length);
+        
+        StringUtility.StringToUint8Array(str, buffer);
+        frames.push(buffer);
+    }
+
+    // pop a string from the begining of the message
+    this.popString = function() {
+        var frame = this.popBuffer();
+
+        return StringUtility.Uint8ArrayToString(frame);
+    }
+
+    this.popBuffer = function() {
+        var frame = frames[0];
+        frames.splice(0, 1);
+
+        return frame;
+    }
+
+    // addd buffer at the end of the message
+    this.addBuffer = function (buffer) {
+
+        if (buffer instanceof ArrayBuffer) {
+            frames.push(new Uint8Array(buffer));
+        }
+        else if (buffer instanceof Uint8Array) {
+            frames.push(buffer);
+        } else {
+            throw new "unknown buffer type";
+        }
+    }
+
+    // return Uint8Array at location i
+    this.getBuffer = function(i) {
+        return frames[i];
+    }        
+}
+
+function StringUtility()
+{ }
+
+StringUtility.StringToUint8Array = function (str, buffer) {
+    if (typeof buffer === 'undefined') {
+        buffer = new Uint8Array(str.length);
+    }
+
+    for (var i = 0, strLen = str.length; i < strLen; i++) {
+        var char = str.charCodeAt(i);
+
+        if (char > 255) {
+            // only ASCII are supported at the moment, we will put ? instead
+            buffer[i] = "?".charCodeAt();
+        } else {
+            buffer[i] = char;
+        }
+    }
+
+    return buffer;
+}
+
+StringUtility.Uint8ArrayToString = function(buffer) {
+    return String.fromCharCode.apply(null, buffer);
 }

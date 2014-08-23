@@ -1,5 +1,4 @@
 // Endpoint class
-
 function Endpoint(address) {
     var ClosedState = 0;
     var ConnectingState = 1;
@@ -83,7 +82,7 @@ function Endpoint(address) {
         var more = view[0];
 
         if (incomingMessage == null) {
-            incomingMessage = new JSMQMessage();
+            incomingMessage = new JSMQ.Message();
         }
 
         incomingMessage.addBuffer(frame);
@@ -216,8 +215,12 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
     };
 }
 
+// JSMQ namespace
+function JSMQ() {
+    
+}
 
-function Dealer() {
+JSMQ.Dealer = function() {
  
     var lb = new LB();
     
@@ -254,7 +257,7 @@ function Dealer() {
     return that;
 }
 
-function Subscriber() {           
+JSMQ.Subscriber = function () {           
 
     var that = new SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMessage);;
 
@@ -326,7 +329,7 @@ function Subscriber() {
         frame[0] = subscribe ? 1 : 0;
         frame.set(subscription, 1);
 
-        var message = new JSMQMessage();
+        var message = new JSMQ.Message();
         message.addBuffer(frame);
 
         return message;
@@ -372,7 +375,7 @@ function Subscriber() {
     return that;
 }
 
-function JSMQMessage() {
+JSMQ.Message = function () {
     var frames = [];
 
     this.getSize = function() {

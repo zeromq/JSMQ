@@ -3,7 +3,7 @@ JSMQ
 
 JSMQ is javascript client for ZeroMQ/NetMQ over WebSockets.
 
-ZeroMQ and NetMQ don't have a WebSockets transport at the moment, however there is a [WebSocket extension to NetMQ](https://github.com/somdoron/NetMQ.WebSockets).
+ZeroMQ and NetMQ don't have a WebSockets transport at the moment, however extensions already exist for [NetMQ](https://github.com/somdoron/NetMQ.WebSockets) and [CZMQ](https://github.com/ZeroMQ/zwssock).
 
 For browsers without WebSockets support ([RFC6455](http://tools.ietf.org/html/rfc6455)) you can try to use [web-socket-js](https://github.com/gimite/web-socket-js).
 
@@ -11,7 +11,7 @@ Both JSMQ and NetMQ WebSockets are beta at the moment and the API and protocol w
 
 The JSMQ currently implement the dealer and subscriber patterns and the NetMQ WebSockets implement the router and publisher patterns.
 
-You can download the JSMQ.JS file from this page or from (nuget)[https://www.nuget.org/packages/JSMQ/], just search for JSMQ and include prerelease.
+You can download the JSMQ.JS file from this page or from [nuget](https://www.nuget.org/packages/JSMQ/), just search for JSMQ and include prerelease.
 
 Using JSMQ is very similar to using other high level binding of ZeroMQ. Following is small example:
 

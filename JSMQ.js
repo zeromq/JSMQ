@@ -85,7 +85,7 @@ function Endpoint(address) {
             incomingMessage = new JSMQ.Message();
         }
 
-        incomingMessage.addBuffer(frame);
+        incomingMessage.addBuffer(view.subarray(1));
 
         // last message
         if (more == 0) {

@@ -1,5 +1,5 @@
 <html>
-    <script src="C:\Git\JSMQ\JSMQ.js"></script>
+    <script src="JSMQ.js"></script>
     <script>
         var dealer = new JSMQ.Dealer();
         dealer.connect("ws://localhost");
@@ -35,11 +35,17 @@
             
             dealer.send(message);
         }
+
+        function onInputKeyPress(e) {
+            var unicode = e.keyCode ? e.keyCode : e.charCode;
+            if (unicode == 13)
+              send();
+        }
     </script>
     <body>                        
         <textarea id="chatTextArea" readonly="readonly"></textarea>
         <br/>
-        <label>Message:</label><input id="messageTextBox" value="" />
+        <label>Message:</label><input id="messageTextBox" value="" onkeypress="onInputKeyPress(event)"/>
         <button id="sendButton" disabled="disabled" onclick="javascript:send();">
             Send
         </button>                    

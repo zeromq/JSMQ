@@ -205,6 +205,14 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
     this.disconnect = function(address) {
         // TODO: implement disconnect
     };
+
+    this.isConnected = function() {
+        for(i = 0; i < endpoints.length; i++)
+            if (!endpoints[i].getIsActive())
+                return false;
+                
+        return true;
+    }
     
     this.send = function (message) {        
         return xsend(message);                

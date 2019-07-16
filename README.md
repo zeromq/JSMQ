@@ -17,7 +17,7 @@ Using JSMQ is very similar to using other high level binding of ZeroMQ. Followin
 
 ```html
 <html>
-    <script src="C:\Git\JSMQ\JSMQ.js"></script>
+    <script src="JSMQ.js"></script>
     <script>
         var dealer = new JSMQ.Dealer();
         dealer.connect("ws://localhost");

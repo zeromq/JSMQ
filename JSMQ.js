@@ -107,7 +107,11 @@ function Endpoint(address) {
     
     this.getIsActive = function() {
         return state == ActiveState;
-    };    
+    };
+    
+    this.getIsConnecting = function() {
+        return state == ConnectingState;
+    }
 
     this.write = function (message) {
         var messageSize = message.getSize();
@@ -209,6 +213,14 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
     this.isConnected = function() {
         for(i = 0; i < endpoints.length; i++)
             if (!endpoints[i].getIsActive())
+                return false;
+                
+        return true;
+    }
+
+    this.isConnecting = function() {
+        for(i = 0; i < endpoints.length; i++)
+            if (!endpoints[i].getIsConnecting())
                 return false;
                 
         return true;

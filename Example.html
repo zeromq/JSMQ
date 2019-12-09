@@ -41,6 +41,11 @@
             if (unicode == 13)
               send();
         }
+
+        function disconnect() {
+            dealer.disconnect();
+            subscriber.disconnect();
+        }
     </script>
     <body>                        
         <textarea id="chatTextArea" readonly="readonly"></textarea>

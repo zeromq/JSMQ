@@ -4,6 +4,7 @@ function Endpoint(address) {
     var ConnectingState = 1;
     var ActiveState = 2;
     
+    var explicitClose = false;
     var reconnectTries = 0;
     
     console.log("connecting to " + address);
@@ -39,6 +40,7 @@ function Endpoint(address) {
     function onopen (e) {
         console.log("WebSocket opened to " + address);
         reconnectTries = 0;
+        explicitClose = false;
 
         state = ActiveState;
 
@@ -54,6 +56,10 @@ function Endpoint(address) {
 
         if (stateBefore == ActiveState && that.deactivated != null) {
             that.deactivated(that);
+        }
+
+        if (explicitClose) {
+            return;
         }
         
         if (reconnectTries > 10) {
@@ -126,7 +132,12 @@ function Endpoint(address) {
 
             webSocket.send(data);
         }        
-    };    
+    }; 
+    
+    this.close = function() {
+        explicitClose = true;
+        webSocket.close(1000);
+    };
 }
 
 // LoadBalancer
@@ -206,8 +217,10 @@ function SocketBase(xattachEndpoint, xendpointTerminated, xhasOut, xsend, xonMes
         endpoints.push(endpoint);
     };
 
-    this.disconnect = function(address) {
-        // TODO: implement disconnect
+    this.disconnect = function() {
+        endpoints.forEach(el => {
+            el.close();
+        });
     };
 
     this.isConnected = function() {
